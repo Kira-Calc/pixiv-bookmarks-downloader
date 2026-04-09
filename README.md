@@ -34,14 +34,16 @@
 
 3. 运行：
    ```bash
-   python3 pixivdownload.py       # 过滤 AI 作品
-   python3 download_all.py   # 下载全部（不过滤 AI）
+   python3 pixivdownload.py       # 命令行版：过滤 AI 作品
+   python3 download_all.py        # 命令行版：下载全部（不过滤 AI）
+   python3 pixivdownload_gui.py   # 图形界面（带进度条）
    ```
 
-## 两个版本
+## 三个版本
 
-- **`pixivdownload.py`** — 默认版本，基于 tag 关键词过滤 AI 生成作品
-- **`download_all.py`** — 无过滤版本，下载收藏夹全部作品
+- **`pixivdownload.py`** — 命令行版，基于 tag 关键词过滤 AI 生成作品
+- **`download_all.py`** — 命令行版，无过滤，下载收藏夹全部作品
+- **`pixivdownload_gui.py`** — Tkinter 图形界面包装器：开始/停止按钮、进度条、实时日志、AI 过滤开关（无额外依赖）
 
 ## 文件组织
 
