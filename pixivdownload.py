@@ -56,12 +56,20 @@ def fetch_bookmarks_page(offset):
         return None
 
 def is_ai_generated(tags):
-    """Check if any tag matches AI-related keywords."""
+    """Check if any tag matches AI-related keywords.
+
+    Short keywords (<=5 chars) require exact match to avoid false positives
+    like "ai" matching "honkaistarrail". Longer keywords use substring match.
+    """
     for tag in tags:
         tag_lower = tag.lower().strip()
         for ai_tag in AI_TAGS:
-            if ai_tag == tag_lower or ai_tag in tag_lower:
-                return True
+            if len(ai_tag) <= 5:
+                if ai_tag == tag_lower:
+                    return True
+            else:
+                if ai_tag in tag_lower:
+                    return True
     return False
 
 def download_illust(illust_id):
