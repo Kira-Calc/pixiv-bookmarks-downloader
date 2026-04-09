@@ -111,6 +111,10 @@ def organize_files(illust_id, title):
     return len(images)
 
 def main():
+    full_scan = "--full" in sys.argv or os.environ.get("FULL_SCAN") == "1"
+    if full_scan:
+        print("=== FULL SCAN MODE — incremental optimization disabled ===")
+
     # First, navigate to pixiv so we can use fetch (eval-based, compatible with outdated Browser Bridge)
     print("Opening Pixiv...")
     current = run_eval("location.href")
@@ -154,7 +158,7 @@ def main():
         print(f"got {len(works)}, cumulative: {len(all_works)}")
 
         # Incremental stop: if the entire page is already downloaded, older pages will be too
-        if existing and all(str(w["id"]) in existing for w in works):
+        if not full_scan and existing and all(str(w["id"]) in existing for w in works):
             print("  Full page already downloaded — stopping enumeration (incremental mode)")
             break
 

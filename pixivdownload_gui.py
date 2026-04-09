@@ -20,7 +20,7 @@ from tkinter import ttk, scrolledtext
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-FILTERED_SCRIPT = os.path.join(SCRIPT_DIR, "pixivdownload.py")
+FILTERED_SCRIPT = os.path.join(SCRIPT_DIR, "download.py")
 ALL_SCRIPT = os.path.join(SCRIPT_DIR, "download_all.py")
 
 # Progress line: "[12/345] Downloading 12345678 (3p) - title..."
@@ -54,6 +54,11 @@ class PixivDownloaderGUI:
         ttk.Checkbutton(
             top, text="过滤 AI 生成作品", variable=self.filter_var
         ).pack(side=tk.LEFT)
+
+        self.full_scan_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            top, text="完整扫描（补漏）", variable=self.full_scan_var
+        ).pack(side=tk.LEFT, padx=(10, 0))
 
         self.start_btn = ttk.Button(top, text="开始下载", command=self.start)
         self.start_btn.pack(side=tk.LEFT, padx=10)
@@ -108,9 +113,13 @@ class PixivDownloaderGUI:
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
 
+        cmd = [sys.executable, "-u", script]
+        if self.full_scan_var.get():
+            cmd.append("--full")
+
         # Line-buffered subprocess
         self.proc = subprocess.Popen(
-            [sys.executable, "-u", script],
+            cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
