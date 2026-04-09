@@ -25,8 +25,8 @@ ALL_SCRIPT = os.path.join(SCRIPT_DIR, "download_all.py")
 
 # Progress line: "[12/345] Downloading 12345678 (3p) - title..."
 PROGRESS_RE = re.compile(r"\[(\d+)/(\d+)\]\s+Downloading\s+(\d+)")
-# Total line: "Filtered: N works ..." or "Total: N works ..."
-TOTAL_RE = re.compile(r"(?:Filtered|Total):\s+(\d+)\s+works")
+# Actual download count after dedup: "Already downloaded: X, remaining: N"
+TOTAL_RE = re.compile(r"remaining:\s+(\d+)")
 
 
 class PixivDownloaderGUI:
