@@ -34,13 +34,13 @@
 
 3. 运行：
    ```bash
-   python3 download.py       # 过滤 AI 作品
+   python3 pixivdownload.py       # 过滤 AI 作品
    python3 download_all.py   # 下载全部（不过滤 AI）
    ```
 
 ## 两个版本
 
-- **`download.py`** — 默认版本，基于 tag 关键词过滤 AI 生成作品
+- **`pixivdownload.py`** — 默认版本，基于 tag 关键词过滤 AI 生成作品
 - **`download_all.py`** — 无过滤版本，下载收藏夹全部作品
 
 ## 文件组织
