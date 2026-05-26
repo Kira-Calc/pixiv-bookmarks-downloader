@@ -3,3 +3,8 @@ __pycache__/
 *.pyc
 .venv/
 _temp_downloads/
+
+# Local download outputs (never commit user data)
+metadata.jsonl
+config.json
+.DS_Store
