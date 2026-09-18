@@ -22,6 +22,9 @@ OPENCLI = os.path.expanduser("~/.npm-global/bin/opencli")
 CONFIG_PATH = os.path.expanduser("~/.pixiv_bookmarks_downloader.json")
 DEFAULT_OUTPUT_DIR = os.path.expanduser("~/Pictures/pixiv_bookmarks")
 BATCH_SIZE = 48
+# Named browser session for `opencli browser <session> ...`. Reusing one name
+# keeps the same Chrome tab (and its Pixiv login) alive across calls.
+BROWSER_SESSION = os.environ.get("PIXIV_BROWSER_SESSION", "pixivdl").strip() or "pixivdl"
 
 # AI-related tags to exclude (case-insensitive matching).
 # Short keywords (<=5 chars) require exact match to avoid false positives
@@ -65,41 +68,78 @@ def resolve_config():
     return user_id, output_dir
 
 
-def run_eval(js_code: str, timeout: int = 30) -> str:
-    """Run JS in browser via opencli operate eval."""
-    result = subprocess.run(
-        [OPENCLI, "operate", "eval", js_code],
-        capture_output=True, text=True, timeout=timeout,
-    )
-    return result.stdout.strip()
+class OpenCliError(RuntimeError):
+    """An opencli invocation failed or came back with an error envelope."""
+
+
+def _run_opencli(args, timeout: int) -> str:
+    try:
+        result = subprocess.run(
+            [OPENCLI, *args], capture_output=True, text=True, timeout=timeout,
+        )
+    except FileNotFoundError:
+        raise OpenCliError(f"opencli not found at {OPENCLI}")
+    except subprocess.TimeoutExpired:
+        raise OpenCliError(f"opencli timed out after {timeout}s: {' '.join(args[:3])}")
+
+    out = (result.stdout or "").strip()
+    err = (result.stderr or "").strip()
+    # opencli prints usage errors ("error: unknown command ...") to stdout and
+    # still exits 0, so the return code alone can't tell us the call was bad.
+    if result.returncode != 0 or out.startswith("error:") or err.startswith("error:"):
+        raise OpenCliError(out or err or f"exit code {result.returncode}")
+    return out
+
+
+def run_eval(js_code: str, timeout: int = 60) -> str:
+    """Run JS in the bound page and return its result as text.
+
+    opencli >= 1.8 exposes this as `opencli browser <session> eval <js>`
+    (it replaced the old `opencli operate eval`), awaits returned promises,
+    and prints the resolved value straight to stdout.
+    """
+    return _run_opencli(["browser", BROWSER_SESSION, "eval", js_code], timeout)
+
+
+def open_url(url: str, timeout: int = 120) -> str:
+    return _run_opencli(["browser", BROWSER_SESSION, "open", url], timeout)
+
+
+def ensure_pixiv_tab() -> None:
+    """Make sure the browser session has a Pixiv page bound to it."""
+    try:
+        current = run_eval("location.href", timeout=30)
+    except OpenCliError:
+        current = ""
+    if "pixiv.net" not in current:
+        open_url("https://www.pixiv.net/")
 
 
 def fetch_bookmarks_page(user_id: str, offset: int):
-    """Fetch a page of bookmarks via Pixiv AJAX API."""
-    js = f"""
-    fetch('https://www.pixiv.net/ajax/user/{user_id}/illusts/bookmarks?tag=&offset={offset}&limit={BATCH_SIZE}&rest=show')
-      .then(r => r.json())
-      .then(d => {{
-        const works = d.body.works.map(w => ({{
-          id: w.id, title: w.title, pages: w.pageCount,
-          tags: w.tags,
-          userId: w.userId, userName: w.userName,
-          illustType: w.illustType, createDate: w.createDate,
-          updateDate: w.updateDate, xRestrict: w.xRestrict,
-          url: w.url
-        }}));
-        document.title = JSON.stringify({{total: d.body.total, works}});
-      }})
-      .catch(e => {{ document.title = JSON.stringify({{error: e.message}}); }});
-    'fetching...'
-    """
-    run_eval(js)
-    time.sleep(3)
-    result = run_eval("document.title")
+    """Fetch a page of bookmarks via the Pixiv AJAX API, run in page context."""
+    js = (
+        "fetch('https://www.pixiv.net/ajax/user/%s/illusts/bookmarks"
+        "?tag=&offset=%d&limit=%d&rest=show', {credentials: 'include'})"
+        ".then(r => r.json())"
+        ".then(d => {"
+        " if (d.error) throw new Error(d.message || 'pixiv api returned error');"
+        " return JSON.stringify({total: d.body.total, works: d.body.works.map(w => ({"
+        "id: w.id, title: w.title, pages: w.pageCount, tags: w.tags || [],"
+        "userId: w.userId, userName: w.userName, illustType: w.illustType,"
+        "createDate: w.createDate, updateDate: w.updateDate,"
+        "xRestrict: w.xRestrict, url: w.url}))});"
+        " })"
+        ".catch(e => JSON.stringify({error: String((e && e.message) || e)}))"
+    ) % (user_id, offset, BATCH_SIZE)
+
+    try:
+        result = run_eval(js)
+    except OpenCliError as e:
+        return {"error": str(e)}
     try:
         return json.loads(result)
     except json.JSONDecodeError:
-        return None
+        return {"error": f"unparsable eval output: {result[:200]!r}"}
 
 
 def is_ai_generated(tags: Iterable[str]) -> bool:
@@ -216,10 +256,15 @@ def run(filter_ai: bool) -> None:
     print(f"AI filter: {'on' if filter_ai else 'off'}")
 
     print("Opening Pixiv...")
-    current = run_eval("location.href")
-    if "pixiv.net" not in current:
-        run_eval("location.href='https://www.pixiv.net/'")
-        time.sleep(4)
+    try:
+        ensure_pixiv_tab()
+    except OpenCliError as e:
+        sys.exit(
+            f"ERROR: cannot drive the browser via opencli: {e}\n"
+            "Check that opencli is installed and the Browser Bridge Chrome "
+            "extension is connected (`opencli browser "
+            f"{BROWSER_SESSION} open https://www.pixiv.net/`)."
+        )
 
     existing = collect_existing_ids(output_dir)
     print(f"Local existing: {len(existing)} works")
@@ -232,7 +277,14 @@ def run(filter_ai: bool) -> None:
         print(f"  Fetching offset {offset}...", end=" ", flush=True)
         data = fetch_bookmarks_page(user_id, offset)
         if not data or "error" in data:
-            print(f"Error: {data}")
+            reason = data.get("error") if data else "no response from browser eval"
+            print(f"Error: {reason}")
+            if offset == 0:
+                print(
+                    "  Hint: if this says 'unknown command', opencli's CLI surface "
+                    "changed again — check `opencli browser --help`. If it mentions "
+                    "auth, log in to Pixiv in the bridged Chrome window first."
+                )
             break
         if total is None:
             total = data["total"]

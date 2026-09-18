@@ -17,7 +17,7 @@
 ## 依赖
 
 - Python 3.8+
-- [OpenCLI](https://www.npmjs.com/package/opencli) + Browser Bridge Chrome 扩展
+- [OpenCLI](https://www.npmjs.com/package/opencli) **>= 1.8**（使用 `opencli browser <session> eval`；1.8 之前的 `opencli operate eval` 已不兼容）+ Browser Bridge Chrome 扩展
 - 已登录 Pixiv 的 Chrome 浏览器
 
 ## 安装与使用
@@ -61,6 +61,8 @@
 1. 环境变量 `PIXIV_UID` / `PIXIV_OUTPUT_DIR`
 2. `~/.pixiv_bookmarks_downloader.json`
 3. 内置默认（output_dir = `~/Pictures/pixiv_bookmarks/`；UID **没有**默认值，未配置则报错退出）
+
+另有 `PIXIV_BROWSER_SESSION`（默认 `pixivdl`）用于指定 opencli 的浏览器会话名；同名会话会复用同一个 Chrome 标签页与登录态，改名可与其他 opencli 任务隔离。
 
 ## 文件组织
 
